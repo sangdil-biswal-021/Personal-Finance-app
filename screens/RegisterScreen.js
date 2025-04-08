@@ -26,7 +26,7 @@ const RegisterScreen = ({ navigation }) => {
           createdAt: new Date().toISOString(),
         });
         
-        navigation.navigate('Home');
+        navigation.navigate("Home");
       } catch (error) {
         Alert.alert('Registration Error', error.message);
       } finally {

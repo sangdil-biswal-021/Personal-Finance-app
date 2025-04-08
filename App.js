@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './api/firebase/config';
+import { MaterialIcons } from '@expo/vector-icons';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -38,11 +39,22 @@ export default function App() {
         {user ? (
           // Authenticated user screens
           <>
-            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Home" component={HomeScreen} options={({ navigation }) => ({
+            title: 'Home',
+            headerRight: () => (
+              <MaterialIcons 
+                name="account-circle" 
+                size={28} 
+                color="#007bff" 
+                style={{ marginRight: 16 }} 
+                onPress={() => navigation.navigate("Profile")} 
+              />
+            ),
+          })} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Transactions" component={TransactionsScreen} />
             <Stack.Screen name="Budget" component={BudgetScreen} />
             <Stack.Screen name="SplitMoney" component={SplitMoneyScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
           </>
         ) : (
           // Non-authenticated user screens

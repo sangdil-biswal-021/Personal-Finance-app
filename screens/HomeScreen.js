@@ -7,7 +7,7 @@ import { mockData } from '../utils/mockData';
 const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
-      <Header title="Finance Dashboard" />
+      <Header title="Finance Dashboard" navigation={navigation}  />
       <ScrollView>
         <Card style={styles.summaryCard}>
           <Card.Content>
