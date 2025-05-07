@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { 
   ScrollView, 
   View, 
@@ -17,6 +17,16 @@ import { mockData } from '../utils/mockData';
 import { Ionicons } from '@expo/vector-icons';
 
 const TransactionsScreen = () => {
+
+  // useEffect(() => {
+  //   fetchTransactions();
+  // }, []);
+
+  // const fetchTransactions = async () => {
+  //   const data = await getTransactions(); // Implement this function to call your backend
+  //   setTransactions(data);
+  // };
+
   const [transactions, setTransactions] = useState(mockData.transactions);
   const [filteredTransactions, setFilteredTransactions] = useState(mockData.transactions);
   const [searchQuery, setSearchQuery] = useState('');
