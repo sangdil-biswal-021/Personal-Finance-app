@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator 
 import { Dropdown } from 'react-native-element-dropdown';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Keyboard } from 'react-native';
+
 
 const CurrencyConverter = () => {
   const [amount, setAmount] = useState('');
@@ -38,6 +40,7 @@ const CurrencyConverter = () => {
   }, []);
 
   const handleConvert = async () => {
+    Keyboard.dismiss();
     if (!amount || !fromCurrency || !toCurrency) return;
     if (fromCurrency === toCurrency) {
       alert('Please select different currencies');
