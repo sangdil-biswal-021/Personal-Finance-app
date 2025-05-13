@@ -44,6 +44,11 @@ const HomeScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('SplitMoney')}>
             <Text>Split Money</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickAccessButton} 
+            onPress={() => navigation.navigate('FinanceDashboard')}>
+            <Text>Finance Dashboard</Text>
+          </TouchableOpacity>
         </View>
         
         {/* Recent transactions preview */}
@@ -78,8 +83,8 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 14, color: '#666' },
   statValuePlus: { fontSize: 18, fontWeight: 'bold', color:'green' },
   statValueMinus: { fontSize: 18, fontWeight: 'bold',color:'red' },
-  quickAccessContainer: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 16 },
-  quickAccessButton: { padding: 12, backgroundColor: '#e0e0e0', borderRadius: 8 },
+  quickAccessContainer: { flexDirection: 'row',flexWrap:"wrap", justifyContent: 'space-around', marginVertical: 16 },
+  quickAccessButton: { padding: 12, margin: 8, backgroundColor: '#e0e0e0', borderRadius: 8 },
   sectionCard: { margin: 16 },
   transactionItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
   expense: { color: 'red' },
