@@ -13,7 +13,9 @@ import SplitMoneyScreen from './screens/SplitMoneyScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import FinanceDashboard from './screens/FinancialDashboard';
+import FinanceDashboard from './screens/CurrencyConverter';
+import CurrencyConverter from './screens/CurrencyConverter';
+import StockDetails from './screens/StockDetails';
 
 const Stack = createStackNavigator();
 
@@ -56,7 +58,8 @@ export default function App() {
             <Stack.Screen name="Transactions" component={TransactionsScreen} />
             <Stack.Screen name="Budget" component={BudgetScreen} />
             <Stack.Screen name="SplitMoney" component={SplitMoneyScreen} />
-            <Stack.Screen name="FinanceDashboard" component={FinanceDashboard} />
+            <Stack.Screen name="CurrencyConvertor" component={CurrencyConverter} />
+            <Stack.Screen name="StockDetails" component={StockDetails} />
           </>
         ) : (
           // Non-authenticated user screens

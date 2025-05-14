@@ -46,8 +46,13 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.quickAccessButton} 
-            onPress={() => navigation.navigate('FinanceDashboard')}>
-            <Text>Finance Dashboard</Text>
+            onPress={() => navigation.navigate('CurrencyConvertor')}>
+            <Text>Currency Convertor</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.quickAccessButton} 
+            onPress={() => navigation.navigate('StockDetails')}>
+            <Text>StockDetails</Text>
           </TouchableOpacity>
         </View>
         
