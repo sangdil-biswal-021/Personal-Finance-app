@@ -67,7 +67,7 @@ const StockDetails = () => {
     const slicedData = historicalData
       .slice(0, currentIndex)
       .reverse(); // Reverse to show most recent on the right
-      
+    
     return {
       labels: slicedData.map((_, index) => 
         index % 5 === 0 ? (slicedData.length - index) : ''),
@@ -163,6 +163,9 @@ const StockDetails = () => {
     setTooltipPosition({ x: adjustedX, y: adjustedY });
   }, [historicalData]);
 
+  // Determine if the prediction price is less than the current price
+  const isPredictionLower = prediction && parseFloat(prediction.prediction) < historicalData[historicalData.length - 1]?.close;
+
   return (
     <View style={styles.container}>
       {/* Search Section */}
@@ -252,12 +255,12 @@ const StockDetails = () => {
           {prediction && (
             <View style={styles.predictionCard}>
               <View style={styles.predictionHeader}>
-                <Icon name="trending-up" size={24} color="#4CAF50" />
+                <Icon name={isPredictionLower ? "trending-down" : "trending-up"} size={24} color={isPredictionLower ? "#FF3B30" : "#4CAF50"} />
                 <Text style={styles.predictionTitle}>Next Day Prediction</Text>
               </View>
               <View style={styles.predictionContent}>
                 <Text style={styles.predictionLabel}>Expected Price:</Text>
-                <Text style={styles.predictionValue}>
+                <Text style={[styles.predictionValue, { color: isPredictionLower ? "#FF3B30" : "#4CAF50" }]}>
                   ${parseFloat(prediction.prediction).toFixed(2)}
                 </Text>
               </View>
@@ -273,12 +276,13 @@ const StockDetails = () => {
       {selectedPoint && (
         <View style={[styles.tooltip, { left: tooltipPosition.x, top: tooltipPosition.y }]}>
           <Text style={styles.tooltipDate}>{selectedPoint.date}</Text>
+          <Text>{'\u2022'}</Text>
           <Text style={styles.tooltipPrice}>${selectedPoint.price}</Text>
           <TouchableOpacity 
             style={styles.closeButton}
             onPress={() => setSelectedPoint(null)}
           >
-            <Icon name="close" size={16} color="#fff" />
+            <Icon name="close" size={10} color="#fff" />
           </TouchableOpacity>
         </View>
       )}
@@ -330,7 +334,7 @@ const styles = StyleSheet.create({
   predictionTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A1A', marginLeft: 8 },
   predictionContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
   predictionLabel: { fontSize: 16, color: '#666' },
-  predictionValue: { fontSize: 24, fontWeight: '700', color: '#4CAF50' },
+  predictionValue: { fontSize: 24, fontWeight: '700' },
   predictionDate: { fontSize: 12, color: '#999', marginTop: 8, fontStyle: 'italic' },
   fullLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#666' },
@@ -339,15 +343,19 @@ const styles = StyleSheet.create({
   noResults: { padding: 15, color: '#999', textAlign: 'center' },
   tooltip: {
     position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    padding: 8,
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 5,
+    maxWidth: 140,
+    boxShadow: '0px 2px 10px rgba(0, 0, 0, 0.1)',
   },
-  tooltipDate: { color: '#fff', marginRight: 8, fontSize: 12 },
-  tooltipPrice: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  tooltipDate: { color: 'grey', fontSize: 8, fontWeight: 'thin' },
+  tooltipPrice: {  paddingLeft:'4px',color: 'green', fontWeight: 'bold', fontSize: 14 },
   closeButton: { marginLeft: 8, backgroundColor: '#FF6B6B', borderRadius: 10, padding: 4 },
 });
 
