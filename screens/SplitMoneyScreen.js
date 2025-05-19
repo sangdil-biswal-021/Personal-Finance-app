@@ -1,69 +1,99 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Button, FlatList, Alert } from 'react-native';
+import {
+  View, Text, StyleSheet, TextInput, Button, FlatList, Alert,
+  TouchableOpacity, Keyboard, Modal, TouchableWithoutFeedback,
+  Platform, ScrollView, KeyboardAvoidingView
+} from 'react-native';
 import { ref, push, onValue, remove } from 'firebase/database';
 import { auth, database } from '../api/firebase/config';
 import { Header } from '../components/Header';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const SplitMoneyScreen = () => {
   const [users, setUsers] = useState([]);
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
   const [expenses, setExpenses] = useState([]);
-  const [description, setDescription] = useState('');
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [newExpense, setNewExpense] = useState({
+    description: '',
+    amount: '',
+    selectedUsers: []
+  });
+  const [userTotals, setUserTotals] = useState({});
 
-  // Load existing split expenses when component mounts
   useEffect(() => {
     const userId = auth.currentUser.uid;
     const expensesRef = ref(database, 'splitExpenses/' + userId);
-    
+
     const unsubscribe = onValue(expensesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const expensesList = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setExpenses(expensesList);
-      } else {
-        setExpenses([]);
-      }
+      const data = snapshot.val() || {};
+      const expensesList = Object.keys(data).map(key => ({
+        id: key,
+        selectedUsers: data[key].selectedUsers || data[key].users || [],
+        ...data[key]
+      }));
+      setExpenses(expensesList);
+      calculateUserTotals(expensesList);
     });
-    
+
     return () => unsubscribe();
   }, []);
 
+  const calculateUserTotals = (expenses) => {
+    const totals = {};
+    expenses.forEach(expense => {
+      const amount = parseFloat(expense.splitAmount) || 0;
+      expense.selectedUsers?.forEach(user => {
+        totals[user] = (totals[user] || 0) + amount;
+      });
+    });
+    setUserTotals(totals);
+  };
+
   const addUser = () => {
-    if (name && !users.includes(name)) {
-      setUsers([...users, name]);
+    const trimmed = name.trim();
+    if (trimmed && !users.includes(trimmed)) {
+      setUsers([...users, trimmed]);
       setName('');
-    } else if (users.includes(name)) {
+      Keyboard.dismiss();
+    } else if (users.includes(trimmed)) {
       Alert.alert('Error', 'This user is already added');
     }
   };
 
+  const toggleUserSelection = (user) => {
+    setNewExpense(prev => ({
+      ...prev,
+      selectedUsers: prev.selectedUsers.includes(user)
+        ? prev.selectedUsers.filter(u => u !== user)
+        : [...prev.selectedUsers, user]
+    }));
+  };
+
   const addExpense = () => {
-    if (amount && users.length > 0 && description) {
-      const userId = auth.currentUser.uid;
-      const splitAmount = (parseFloat(amount) / users.length).toFixed(2);
-      
-      const newExpense = {
-        description,
-        totalAmount: amount,
-        splitAmount,
-        users,
-        createdAt: new Date().toISOString(),
-        createdBy: userId
-      };
-      
-      const expensesRef = ref(database, 'splitExpenses/' + userId);
-      push(expensesRef, newExpense);
-      
-      setAmount('');
-      setDescription('');
-      // Keep users array as is for potential additional expenses with same group
-    } else {
-      Alert.alert('Error', 'Please fill all fields and add at least one user');
+    if (!newExpense.description || !newExpense.amount || newExpense.selectedUsers.length === 0) {
+      Alert.alert('Error', 'Please fill all fields and select at least one user');
+      return;
     }
+
+    const userId = auth.currentUser.uid;
+    const splitAmount = (parseFloat(newExpense.amount) / newExpense.selectedUsers.length).toFixed(2);
+
+    const expenseData = {
+      description: newExpense.description,
+      amount: newExpense.amount,
+      selectedUsers: newExpense.selectedUsers,
+      splitAmount,
+      createdAt: new Date().toISOString(),
+      createdBy: userId
+    };
+
+    const expensesRef = ref(database, 'splitExpenses/' + userId);
+    push(expensesRef, expenseData);
+
+    setNewExpense({ description: '', amount: '', selectedUsers: [] });
+    setShowExpenseModal(false);
+    Keyboard.dismiss();
   };
 
   const deleteExpense = (id) => {
@@ -73,111 +103,179 @@ const SplitMoneyScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Header title="Split Expenses" />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.container}>
+        <Header title="Split Expenses" backgroundColor={'grey'} />
 
+        <FlatList
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <>
+              <Text style={styles.sectionTitle}>Participants</Text>
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Add participant name"
+                    value={name}
+                    onChangeText={setName}
+                    onSubmitEditing={addUser}
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity style={styles.addButton} onPress={addUser}>
+                    <Icon name="person-add" size={24} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
 
-      
-      <Text style={styles.sectionTitle}>Add Users</Text>
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter user name"
-          value={name}
-          onChangeText={setName}
+              {users.length > 0 && (
+                <View style={styles.usersContainer}>
+                  <Text style={styles.label}>Participants:</Text>
+                  <Text>{users.join(', ')}</Text>
+                </View>
+              )}
+
+              <Text style={styles.sectionTitle}>Current Spendings</Text>
+              <View style={styles.totalsContainer}>
+                {users.length === 0 && <Text style={{ color: '#888' }}>Add participants to begin</Text>}
+                {users.map(user => (
+                  <View key={user} style={styles.userBalance}>
+                    <Text style={styles.userName}>{user}</Text>
+                    <Text style={styles.balanceAmount}>
+                      ₹{userTotals[user]?.toFixed(2) || '0.00'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.sectionTitle}>Expense History</Text>
+            </>
+          }
+          data={expenses}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center' }}>No expenses yet.</Text>}
+          renderItem={({ item }) => (
+            <View style={styles.expenseItem}>
+              <View style={styles.expenseHeader}>
+                <Text style={styles.expenseDescription}>{item.description}</Text>
+                <Text style={styles.expenseAmount}>₹{item.amount}</Text>
+              </View>
+              <Text style={styles.splitText}>
+                Split with: {item.selectedUsers?.length ? item.selectedUsers.join(', ') : 'No participants'}
+              </Text>
+              <Text style={styles.splitAmount}>₹{item.splitAmount} per person</Text>
+              <Button title="Delete" onPress={() => deleteExpense(item.id)} color="#e74c3c" />
+            </View>
+          )}
+          contentContainerStyle={{ paddingBottom: 120 }}
         />
-        <Button title="Add User" onPress={addUser} />
-      </View>
-      
-      {users.length > 0 && (
-        <View style={styles.usersContainer}>
-          <Text style={styles.label}>Users in this split:</Text>
-          <Text>{users.join(', ')}</Text>
-        </View>
-      )}
-      
-      <Text style={styles.sectionTitle}>Add Expense</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Description (e.g., Dinner, Movie)"
-        value={description}
-        onChangeText={setDescription}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Enter total amount"
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="numeric"
-      />
-      <Button title="Split Expense" onPress={addExpense} />
-      
-      <Text style={styles.sectionTitle}>Expense History</Text>
-      <FlatList
-        data={expenses}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.expenseItem}>
-            <Text style={styles.expenseDescription}>{item.description}</Text>
-            <Text>Total: ${item.totalAmount}</Text>
-            <Text>Amount per user: ${item.splitAmount}</Text>
-            <Text>Split with: {item.users.join(', ')}</Text>
-            <Button title="Delete" onPress={() => deleteExpense(item.id)} color="red" />
-          </View>
+
+        <TouchableOpacity style={styles.floatingButton} onPress={() => setShowExpenseModal(true)}>
+          <Icon name="add" size={30} color="white" />
+        </TouchableOpacity>
+
+        {showExpenseModal && (
+          <Modal
+            visible={showExpenseModal}
+            animationType="slide"
+            transparent={Platform.OS === 'ios'}
+            onRequestClose={() => setShowExpenseModal(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.modalContainer}>
+                <ScrollView keyboardShouldPersistTaps="handled">
+                  <Text style={styles.modalTitle}>New Expense</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Expense description"
+                    value={newExpense.description}
+                    onChangeText={text => setNewExpense(prev => ({ ...prev, description: text }))}
+                  />
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Total amount"
+                    keyboardType="numeric"
+                    value={newExpense.amount}
+                    onChangeText={text => setNewExpense(prev => ({ ...prev, amount: text }))}
+                  />
+                  <Text style={styles.participantsTitle}>Select Participants</Text>
+                  <View style={styles.participantsContainer}>
+                    {users.length === 0 && <Text style={{ color: '#888' }}>Add users first</Text>}
+                    {users.map(user => (
+                      <TouchableOpacity
+                        key={user}
+                        style={[
+                          styles.userTag,
+                          newExpense.selectedUsers.includes(user) && styles.selectedUserTag
+                        ]}
+                        onPress={() => toggleUserSelection(user)}
+                      >
+                        <Text style={newExpense.selectedUsers.includes(user) && styles.selectedUserText}>
+                          {user}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.modalButtonContainer}>
+                    <Button
+                      title="Cancel"
+                      onPress={() => {
+                        setShowExpenseModal(false);
+                        Keyboard.dismiss();
+                      }}
+                      color="#666"
+                    />
+                    <Button
+                      title="Add Expense"
+                      onPress={addExpense}
+                      color="#2ecc71"
+                    />
+                  </View>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
         )}
-      />
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  sectionTitle: { fontSize: 20, fontWeight: '600', marginVertical: 16, color: '#2c3e50', marginLeft: 16 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 16 },
+  input: { flex: 1, backgroundColor: 'white', padding: 12, borderRadius: 8, marginRight: 8, fontSize: 16, elevation: 2 },
+  addButton: { backgroundColor: '#3498db', padding: 12, borderRadius: 8, elevation: 2 },
+  usersContainer: { backgroundColor: '#f0f0f0', padding: 8, borderRadius: 4, marginHorizontal: 16, marginBottom: 16 },
+  label: { fontWeight: 'bold', marginBottom: 4 },
+  floatingButton: {
+    position: 'absolute', bottom: 30, right: 30, backgroundColor: '#27ae60',
+    width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+    elevation: 5, zIndex: 1,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 8,
-    marginRight: 8,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  usersContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 16,
-  },
-  label: {
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  expenseItem: {
-    marginVertical: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    backgroundColor: '#fff',
-  },
-  expenseDescription: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
+  totalsContainer: { backgroundColor: 'white', borderRadius: 8, padding: 16, marginHorizontal: 16, marginBottom: 16, elevation: 2 },
+  userBalance: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#ecf0f1' },
+  userName: { fontSize: 16, color: '#34495e' },
+  balanceAmount: { fontSize: 16, fontWeight: '600', color: '#2ecc71' },
+  expenseItem: { backgroundColor: 'white', borderRadius: 8, padding: 16, marginHorizontal: 16, marginBottom: 12, elevation: 2 },
+  expenseHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  expenseDescription: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },
+  expenseAmount: { fontSize: 16, color: '#e74c3c', fontWeight: '600' },
+  splitText: { color: '#7f8c8d', marginBottom: 4 },
+  splitAmount: { color: '#27ae60', marginBottom: 12, fontWeight: '500' },
+  modalContainer: { flex: 1, padding: 24, backgroundColor: 'white', justifyContent: 'center' },
+  modalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 24, color: '#2c3e50', textAlign: 'center' },
+  modalInput: { backgroundColor: '#ecf0f1', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16 },
+  participantsTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#34495e' },
+  participantsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  userTag: { backgroundColor: '#ecf0f1', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16, margin: 4 },
+  selectedUserTag: { backgroundColor: '#3498db' },
+  selectedUserText: { color: 'white' },
+  modalButtonContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 24, marginBottom: 24 },
 });
 
 export default SplitMoneyScreen;
