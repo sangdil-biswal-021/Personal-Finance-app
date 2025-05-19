@@ -17,7 +17,8 @@ const SplitMoneyScreen = () => {
   const [newExpense, setNewExpense] = useState({
     description: '',
     amount: '',
-    selectedUsers: []
+    selectedUsers: [],
+    paidBy: null
   });
   const [userTotals, setUserTotals] = useState({});
 
@@ -29,7 +30,8 @@ const SplitMoneyScreen = () => {
       const data = snapshot.val() || {};
       const expensesList = Object.keys(data).map(key => ({
         id: key,
-        selectedUsers: data[key].selectedUsers || data[key].users || [],
+        selectedUsers: data[key].selectedUsers || [],
+        paidBy: data[key].paidBy || null,
         ...data[key]
       }));
       setExpenses(expensesList);
@@ -42,9 +44,17 @@ const SplitMoneyScreen = () => {
   const calculateUserTotals = (expenses) => {
     const totals = {};
     expenses.forEach(expense => {
-      const amount = parseFloat(expense.splitAmount) || 0;
-      expense.selectedUsers?.forEach(user => {
-        totals[user] = (totals[user] || 0) + amount;
+      const amount = parseFloat(expense.amount) || 0;
+      const splitCount = expense.selectedUsers.length;
+      if (splitCount === 0) return;
+
+      const perPerson = amount / splitCount;
+      expense.selectedUsers.forEach(user => {
+        if (user === expense.paidBy) {
+          totals[user] = (totals[user] || 0) + (amount - perPerson);
+        } else {
+          totals[user] = (totals[user] || 0) - perPerson;
+        }
       });
     });
     setUserTotals(totals);
@@ -70,9 +80,20 @@ const SplitMoneyScreen = () => {
     }));
   };
 
+  const selectPayer = (user) => {
+    setNewExpense(prev => ({
+      ...prev,
+      paidBy: user,
+      selectedUsers: prev.selectedUsers.includes(user) 
+        ? prev.selectedUsers 
+        : [...prev.selectedUsers, user]
+    }));
+  };
+
   const addExpense = () => {
-    if (!newExpense.description || !newExpense.amount || newExpense.selectedUsers.length === 0) {
-      Alert.alert('Error', 'Please fill all fields and select at least one user');
+    if (!newExpense.description || !newExpense.amount || 
+        !newExpense.paidBy || newExpense.selectedUsers.length === 0) {
+      Alert.alert('Error', 'Please fill all fields and select payer + participants');
       return;
     }
 
@@ -83,6 +104,7 @@ const SplitMoneyScreen = () => {
       description: newExpense.description,
       amount: newExpense.amount,
       selectedUsers: newExpense.selectedUsers,
+      paidBy: newExpense.paidBy,
       splitAmount,
       createdAt: new Date().toISOString(),
       createdBy: userId
@@ -91,7 +113,7 @@ const SplitMoneyScreen = () => {
     const expensesRef = ref(database, 'splitExpenses/' + userId);
     push(expensesRef, expenseData);
 
-    setNewExpense({ description: '', amount: '', selectedUsers: [] });
+    setNewExpense({ description: '', amount: '', selectedUsers: [], paidBy: null });
     setShowExpenseModal(false);
     Keyboard.dismiss();
   };
@@ -100,6 +122,39 @@ const SplitMoneyScreen = () => {
     const userId = auth.currentUser.uid;
     const expenseRef = ref(database, `splitExpenses/${userId}/${id}`);
     remove(expenseRef);
+  };
+
+  const renderExpenseItem = ({ item }) => {
+    const perPerson = parseFloat(item.splitAmount);
+    const totalPaid = parseFloat(item.amount);
+    const payer = item.paidBy;
+
+    return (
+      <View style={styles.expenseItem}>
+        <View style={styles.expenseHeader}>
+          <Text style={styles.expenseDescription}>{item.description}</Text>
+          <Text style={styles.expenseAmount}>₹{item.amount}</Text>
+        </View>
+        <Text style={styles.paidByText}>Paid by: {payer}</Text>
+        <Text style={styles.splitText}>
+          Split between: {item.selectedUsers.join(', ')}
+        </Text>
+        
+        <View style={styles.debtContainer}>
+          {item.selectedUsers.map(user => (
+            user !== payer && (
+              <View key={user} style={styles.debtRow}>
+                <Text style={styles.debtUser}>{user}</Text>
+                <Text style={styles.owesText}>
+                  owes ₹{perPerson.toFixed(2)} to {payer}
+                </Text>
+              </View>
+            )
+          ))}
+        </View>
+        <Button title="Delete" onPress={() => deleteExpense(item.id)} color="#e74c3c" />
+      </View>
+    );
   };
 
   return (
@@ -138,17 +193,24 @@ const SplitMoneyScreen = () => {
                 </View>
               )}
 
-              <Text style={styles.sectionTitle}>Current Spendings</Text>
+              <Text style={styles.sectionTitle}>Current Balances</Text>
               <View style={styles.totalsContainer}>
-                {users.length === 0 && <Text style={{ color: '#888' }}>Add participants to begin</Text>}
-                {users.map(user => (
-                  <View key={user} style={styles.userBalance}>
-                    <Text style={styles.userName}>{user}</Text>
-                    <Text style={styles.balanceAmount}>
-                      ₹{userTotals[user]?.toFixed(2) || '0.00'}
-                    </Text>
-                  </View>
-                ))}
+                {users.length === 0 ? (
+                  <Text style={{ color: '#888' }}>Add participants to begin</Text>
+                ) : (
+                  users.map(user => (
+                    <View key={user} style={styles.userBalance}>
+                      <Text style={styles.userName}>{user}</Text>
+                      <Text style={[
+                        styles.balanceAmount,
+                        { color: userTotals[user] >= 0 ? '#2ecc71' : '#e74c3c' }
+                      ]}>
+                        ₹{Math.abs(userTotals[user]?.toFixed(2)) || '0.00'}
+                        {userTotals[user] >= 0 ? ' owed to' : ' owes'} 
+                      </Text>
+                    </View>
+                  ))
+                )}
               </View>
 
               <Text style={styles.sectionTitle}>Expense History</Text>
@@ -157,19 +219,7 @@ const SplitMoneyScreen = () => {
           data={expenses}
           keyExtractor={(item) => item.id}
           ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center' }}>No expenses yet.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.expenseItem}>
-              <View style={styles.expenseHeader}>
-                <Text style={styles.expenseDescription}>{item.description}</Text>
-                <Text style={styles.expenseAmount}>₹{item.amount}</Text>
-              </View>
-              <Text style={styles.splitText}>
-                Split with: {item.selectedUsers?.length ? item.selectedUsers.join(', ') : 'No participants'}
-              </Text>
-              <Text style={styles.splitAmount}>₹{item.splitAmount} per person</Text>
-              <Button title="Delete" onPress={() => deleteExpense(item.id)} color="#e74c3c" />
-            </View>
-          )}
+          renderItem={renderExpenseItem}
           contentContainerStyle={{ paddingBottom: 120 }}
         />
 
@@ -188,6 +238,25 @@ const SplitMoneyScreen = () => {
               <View style={styles.modalContainer}>
                 <ScrollView keyboardShouldPersistTaps="handled">
                   <Text style={styles.modalTitle}>New Expense</Text>
+
+                  <Text style={styles.subTitle}>Who paid?</Text>
+                  <View style={styles.participantsContainer}>
+                    {users.map(user => (
+                      <TouchableOpacity
+                        key={user}
+                        style={[
+                          styles.userTag,
+                          newExpense.paidBy === user && styles.payerTag
+                        ]}
+                        onPress={() => selectPayer(user)}
+                      >
+                        <Text style={newExpense.paidBy === user && styles.selectedUserText}>
+                          {user}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
                   <TextInput
                     style={styles.modalInput}
                     placeholder="Expense description"
@@ -201,7 +270,8 @@ const SplitMoneyScreen = () => {
                     value={newExpense.amount}
                     onChangeText={text => setNewExpense(prev => ({ ...prev, amount: text }))}
                   />
-                  <Text style={styles.participantsTitle}>Select Participants</Text>
+
+                  <Text style={styles.subTitle}>Participants</Text>
                   <View style={styles.participantsContainer}>
                     {users.length === 0 && <Text style={{ color: '#888' }}>Add users first</Text>}
                     {users.map(user => (
@@ -219,6 +289,7 @@ const SplitMoneyScreen = () => {
                       </TouchableOpacity>
                     ))}
                   </View>
+
                   <View style={styles.modalButtonContainer}>
                     <Button
                       title="Cancel"
@@ -260,20 +331,25 @@ const styles = StyleSheet.create({
   totalsContainer: { backgroundColor: 'white', borderRadius: 8, padding: 16, marginHorizontal: 16, marginBottom: 16, elevation: 2 },
   userBalance: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#ecf0f1' },
   userName: { fontSize: 16, color: '#34495e' },
-  balanceAmount: { fontSize: 16, fontWeight: '600', color: '#2ecc71' },
+  balanceAmount: { fontSize: 16, fontWeight: '600' },
   expenseItem: { backgroundColor: 'white', borderRadius: 8, padding: 16, marginHorizontal: 16, marginBottom: 12, elevation: 2 },
   expenseHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   expenseDescription: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },
   expenseAmount: { fontSize: 16, color: '#e74c3c', fontWeight: '600' },
+  paidByText: { color: '#3498db', marginBottom: 8, fontWeight: '600' },
   splitText: { color: '#7f8c8d', marginBottom: 4 },
-  splitAmount: { color: '#27ae60', marginBottom: 12, fontWeight: '500' },
-  modalContainer: { flex: 1, padding: 24, backgroundColor: 'white', justifyContent: 'center' },
+  debtContainer: { marginVertical: 8, padding: 8, backgroundColor: '#f8f9fa', borderRadius: 8 },
+  debtRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 4 },
+  debtUser: { color: '#2c3e50' },
+  owesText: { color: '#e74c3c' },
+  modalContainer: { flex: 1, padding: 24, backgroundColor: 'white' },
   modalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 24, color: '#2c3e50', textAlign: 'center' },
   modalInput: { backgroundColor: '#ecf0f1', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16 },
-  participantsTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#34495e' },
+  subTitle: { fontSize: 16, fontWeight: '600', marginVertical: 12, color: '#34495e' },
   participantsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  userTag: { backgroundColor: '#ecf0f1', borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16, margin: 4 },
+  userTag: { backgroundColor: '#ecf0f1', borderRadius: 16, padding: 8, margin: 4 },
   selectedUserTag: { backgroundColor: '#3498db' },
+  payerTag: { backgroundColor: '#2ecc71', borderWidth: 2, borderColor: '#27ae60' },
   selectedUserText: { color: 'white' },
   modalButtonContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 24, marginBottom: 24 },
 });
